@@ -1,9 +1,13 @@
 function [ffx,rfx] = empircalBayesTtestMCMC(param1,param2)
 %Empirical Bayesian equivalent two-sample t-test to determine whether there
 %is significant difference at the group level between two fitted parameters 
-%using MCMC samples (marginalised over all other parameters). 
+%using MCMC samples (marginalised over all other parameters). If you wish
+%to obtain random-effects analysis results (rfx, 2nd output argument), in
+%addition to the fixed effects results (ffx, 1st output argument), then 
+%make sure you have the spm_bms function added to the path (SPM12) 
 
-assert(isequal(size(param1),size(param2)),'Matrix size of param1 and param2 must be equal');
+%It's not strictly necessary to have the same number of MCMC samples for each parameter, but we still perform this quick check here.. 
+assert(isequal(size(param1),size(param2)),'Matrix size of param1 and param2 must be equal');    
 [num_MCMC_samples,num_subjects] = size(param1);         %Input size (same for param2)
 
 %Concatenate the parameters to form a collection of params under H0
@@ -46,12 +50,13 @@ marg_pos_prob_2 = comp_marg_pos_prob(marg_pos_density_2);
         prior = studentpdf(xmesh,group_mean,group_std,dof)*dx;
     end
 
-%Compute the prior distributions
+%Compute the prior distributions using the nested function (above)
 prior_0 = compEmpBayesPrior(marg_pos_prob_0);
 prior_1 = compEmpBayesPrior(marg_pos_prob_1);
 prior_2 = compEmpBayesPrior(marg_pos_prob_2);
 
 %Compute the marginal log-likelihood of the data under each hypothesis (per subject)
+%See also equation 17 in Acerbi, Dokka, Angelaki, Ma (2018, PloS Comp Bio): https://doi.org/10.1371/journal.pcbi.1006110
 LLs = nan(2,num_subjects);
 for j=1:num_subjects
     LLs(1,j) = log(trapz(marg_pos_prob_1(j,:).*marg_pos_prob_2(j,:).*prior_0));                             %H0 
@@ -64,11 +69,15 @@ ffx.LLs_H1 = LLs(2,:);
 ffx.BF01 = exp(sum(LLs(1,:))-sum(LLs(2,:)));    %evidence in favour of null
 ffx.BF10 = exp(sum(LLs(2,:))-sum(LLs(1,:)));    %1/ffx.BF01;
 
-%Add spm to path
-addpath('E:\Matlab Toolboxes\spm12');
-
 %Perform a random effects analysis of the results: compute the protected exceedance probability (pxp)  
-rfx.LLs = LLs';
-[rfx.alpha,rfx.exp_r,rfx.xp,rfx.pxp,rfx.bor] = spm_BMS(LLs');
+if nargout > 1
+    if exist('spm_bms','file') == 2
+        rfx.LLs = LLs';
+        [rfx.alpha,rfx.exp_r,rfx.xp,rfx.pxp,rfx.bor] = spm_BMS(rfx.LLs);
+    else
+        rfx.warning = 'SPM_BMS function was not found on the path. Unable to perform random effects analysis';
+        warning(rfx.warning);
+    end
+end
 
 end %[EoF]
