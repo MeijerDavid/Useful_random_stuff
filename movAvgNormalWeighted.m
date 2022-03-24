@@ -4,7 +4,6 @@ function [avg,SD] = movAvgNormalWeighted(x,y,sd,plot_flag)
 %fixed standard deviation (sd = scalar). 
 %Optionally, also compute the weighted SD (2nd output argument) and plot 
 %the results (set "plot_flag" to true). 
-%N.B. Matlab's std function can also compute the weighted mean and SD..
 
 if nargin < 4; plot_flag = false; end           %Set default for optional input
 
@@ -17,7 +16,7 @@ if (nargout <= 1) && ~plot_flag
     return;                                     %Return if SD was not requested
 end
                                                 
-SD = reshape(sum(weights.*(y(:)-avg(:)).^2,1),size(y)); %compute weighted SD
+SD = reshape(sqrt(sum(weights.*(y(:)-avg(:)).^2,1)),size(y)); %compute weighted SD
 
 if ~plot_flag; return; end                      %Return if plots were not requested
 
