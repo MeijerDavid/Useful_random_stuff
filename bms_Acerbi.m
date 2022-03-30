@@ -1,6 +1,9 @@
 function [bms,bms_fac] = bms_Acerbi(lme,factors,alpha0)
 % Bayesian model selection using Luigi Acerbi's code
 %
+% This function assumes that Luigi Acerbi's "Robust Bayesian Model 
+% Selection" (rbms) toolbox has been added to the Matlab path.
+%
 % INPUT:
 % - lme = matrix of (cross-validated) log-likelihoods of size: Ns x Nk
 %   (number of subjects x number of models). 
@@ -13,22 +16,18 @@ function [bms,bms_fac] = bms_Acerbi(lme,factors,alpha0)
 %   factorial analysis = ones(1,Nk) * (average number of factor components
 %   divided by total number of models) 
 
-%Add to path Luigi Acerbi's "Robust Bayesian Model Selection" (rbms) toolbox     
-addpath(genpath('E:\Matlab Toolboxes\rbms-master\matlab'));
-%addpath('E:\Matlab Toolboxes\rbms-selected');
-
 %Set defaults
 [Ns,Nk] = size(lme);
 if nargin < 2 %no factors present
     factors = cell(0,0);
-    alpha0 = ones(1,Nk);
+    alpha0 = ones(1,Nk);                                                    % how often 
 elseif nargin < 3 %factors present but no alpha0 specified
     avg_Nfc = mean(cellfun(@(x)size(x,1),factors));                         % average number of factor components   
     alpha0 = avg_Nfc*ones(1,Nk)/Nk;                                         % alpha0 as defined in Acerbi et al., 2018 PLoS Comp. Biology  
-end                                                                         % this attempts to ensure that the prior per model component is approximately 1 (summed over models belonging to that component)
+end                                                                         % this attempts to ensure that the prior alpha per model component is approximately 1 (summed over models belonging to that component)
 Nf = length(factors);   % Number of factors (to compare)
-nsamples = 1e6;         % Samples used in BMS
-bmshyper = 0;           % BMS hyperprior (0: standard BMS with fixed alpha0)
+nsamples = 1e6;         % Samples used to compute the exceedance probabilities
+bmshyper = 0;           % BMS hyperprior (Default = 0: standard BMS with fixed alpha0 as in spm_BMS :: Set to 1 if you wish to use a Nemenman-Shafee-Bialek hyperprior, see rbms_logprior)
 
 %Initialize output
 bms = [];
@@ -58,7 +57,7 @@ else
 end
 
 %Perform standard Bayesian model selection (using variational bayesian method for fast approximation)    
-[exp_r,xp,pxp,output] = rbms(lme,'Method','vb','Nsamp',nsamples,'PriorWeights',w_k,'HyperPrior',bmshyper,'Display','final');
+[exp_r,xp,pxp,output] = rbms(lme,'PriorWeights',w_k,'HyperPrior',bmshyper);
 bms.alpha(i_nonZeroModels) = output.alpha; 
 bms.exp_r(i_nonZeroModels) = exp_r;
 bms.xp(i_nonZeroModels) = xp;
