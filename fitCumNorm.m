@@ -1,11 +1,13 @@
 function [FittedParams,LL,exitflag] = fitCumNorm(StimLevels,NumPos,OutOfNum,beta_flag,paramIDmatrix,fixedParams,num_fits,num_grid)
-% Fit a cumulative normal using the (beta-)binomial model and maximum
-% likelihood estimation via Matlab's fminsearch (Nelder-Mead optimization). 
+% Fit one or more cumulative normal(s) using the (beta-)binomial model and 
+% maximum likelihood estimation via fminsearch (Nelder-Mead optimization). 
 %
 % Required input: 
 % - "StimLevels", "NumPos", and "OutOfNum"
 %   These should be same sized matrices of size [num_conds x num_levels] 
-%   The meaning is the same as in www.palamedestoolbox.org
+%   Their meaning is the same as in Palamedes: www.palamedestoolbox.org
+%   Use zero-extensions for conditions with fewer number of StimLevels. 
+%   Accumulation of trials per unique StimLevel will be done automatically. 
 %   
 % Output:
 % - "FittedParams" is a matrix of size [num_conds x (3 or 4)]:
@@ -17,14 +19,14 @@ function [FittedParams,LL,exitflag] = fitCumNorm(StimLevels,NumPos,OutOfNum,beta
 %
 % Optional input:
 % - "beta_flag" 
-%   Set beta_flag to true to fit betabinomial model. For more info see:
-%   https://doi.org/10.1016/j.visres.2016.02.002 
+%   Set beta_flag to true to fit the betabinomial model (useful with noisy/
+%   overdispersed). See: https://doi.org/10.1016/j.visres.2016.02.002 
 % - "paramIDmatrix" 
 %   A matrix of the same size as output "FittedParams". It contains indices
 %   of the fitted parameters. Use the same index to share parameters across
 %   conditions. E.g. paramIDmatrix = [1 2 3; 4 2 3] fits four parameters,
-%   of which two are unique PSE's, while the SD and lapse rate are shared. 
-%   Default = [1 2 3; 4 5 6; etc] or [1 2 3 4; 5 6 7 8; etc].
+%   of which two are unique PSE's, while SD and lapse rate are shared in 2
+%   conditions. Default = [1 2 3; 4 5 6; etc] or [1 2 3 4; 5 6 7 8; etc].
 % - "fixedParams"
 %   A vector whose indices correspond to the IDs in "paramIDmatrix". Any
 %   non-NaN value serves as a fixed parameter value. For example, if you do
@@ -32,7 +34,7 @@ function [FittedParams,LL,exitflag] = fitCumNorm(StimLevels,NumPos,OutOfNum,beta
 %   default all parameters are fitted.
 % - "num_fits"
 %   A scalar that indicates the number of fits from which the best one is
-%   returned (best = largest log likelihood, LL). Default = 10.
+%   returned (the best has the largest log likelihood, LL). Default = 10.
 % - "num_grid"
 %   A scalar for the number of random parameter draws to select promising
 %   starting points for the optimization algorithm. Default = 1000.
@@ -41,14 +43,22 @@ function [FittedParams,LL,exitflag] = fitCumNorm(StimLevels,NumPos,OutOfNum,beta
 % David Meijer, 23-03-2022
 
 
-% Ensure same size for all crucial input arguments
+% Ensure same size for all required input arguments
 if ~isequal(size(StimLevels),size(NumPos)) || ~isequal(size(StimLevels),size(OutOfNum))
     error('StimLevels, NumPos, and OutOfNum must be the same size: [num_conds x num_StimLevels]');
 end
+
+%Ensure that NumPos <= OutOfNum
+assert(all(NumPos <= OutOfNum,'all'),'NumPos must never be larger than OutOfNum');
+
+% Flip column vectors to rows
 if (size(StimLevels,2) == 1) && ~(size(StimLevels,1) == 1) 
     StimLevels = StimLevels'; NumPos = NumPos'; OutOfNum = OutOfNum';
     warning('Input vectors StimLevels, NumPos, and OutOfNum were transposed');
 end
+
+% Accumulate trials with the same StimLevel
+[StimLevels,NumPos,OutOfNum] = accumStimLevels(StimLevels,NumPos,OutOfNum); %See helper function below
 num_conds = size(StimLevels,1);
 
 % Determine the number of parameters per condition
@@ -93,7 +103,8 @@ end
 if nargin < 8 || isempty(num_grid)
     num_grid = 1000;    %Default number of samples for random "grid" search
 end
-
+num_grid = max(num_fits,num_grid);        %Ensure that num_grid >= num_fits
+ 
 % Define helper functions for parameter transformation
 logit = @(p) log(p./(1-p));
 logistic = @(x) 1./(1 + exp(-x));
@@ -188,6 +199,37 @@ end %[EoF]
 
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% Helper functions %%%
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Accumulate trials with the same StimLevel
+function [StimLevels,NumPos,OutOfNum] = accumStimLevels(StimLevels,NumPos,OutOfNum)
+    
+    % Remove entries with zero in OutOfNum and accumulate trials with same StimLevels. 
+    % Put them into temporary cell arrays per condition (because number of levels may differ per condition). 
+    num_conds = size(StimLevels,1);
+    StimLevels_cell = cell(num_conds,1);
+    NumPos_cell = cell(num_conds,1);
+    OutOfNum_cell = cell(num_conds,1);
+    for i=1:num_conds
+        i_zero = OutOfNum(1,:)==0;
+        [StimLevels_cell{i},~,IC] = unique(StimLevels(i,~i_zero));
+        NumPos_cell{i} = accumarray(IC,NumPos(i,~i_zero)')';
+        OutOfNum_cell{i} = accumarray(IC,OutOfNum(i,~i_zero)')';
+    end
+    
+    %Return to a matrix form with zero extensions
+    max_num_levels = max(cellfun(@(x) length(x),StimLevels_cell));
+    StimLevels = zeros(num_conds,max_num_levels);
+    NumPos = zeros(num_conds,max_num_levels);
+    OutOfNum = zeros(num_conds,max_num_levels);
+    for i=1:num_conds
+        StimLevels(i,1:length(StimLevels_cell{i})) = StimLevels_cell{i};
+        NumPos(i,1:length(StimLevels_cell{i})) = NumPos_cell{i};
+        OutOfNum(i,1:length(StimLevels_cell{i})) = OutOfNum_cell{i};
+    end
+    
+end %[EoF]
+
 %%%%%%%%%%%%%%%%%%%%%%%%
 
 % Back-transform fitted parameters to meaningful space
