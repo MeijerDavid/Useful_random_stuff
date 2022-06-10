@@ -1,6 +1,7 @@
 function [hl,hp] = boundedLine_DM(x,y,color)
 %Simple adaptation of boundedline function from:
 %https://github.com/kakearney/boundedline-pkg
+%Ensure that x is a row vector, and y has size [3 x length(x)]
     
 if numel(x) == 1    %special case
     hp = plot([x x],y([1 3]),'-','Linewidth',1.5,'Color',[color 0.2]);
