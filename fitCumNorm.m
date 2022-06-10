@@ -1,20 +1,45 @@
-function [FittedParams,LL,exitflag] = fitCumNorm(StimLevels,NumPos,OutOfNum,beta_flag,num_fits,num_grid,paramIDmatrix,fixedParams)
+function [FittedParams,LL,exitflag] = fitCumNorm(StimLevels,NumPos,OutOfNum,beta_flag,paramIDmatrix,fixedParams,num_fits,num_grid)
 % Fit a cumulative normal using the (beta-)binomial model and maximum
-% likelihood estimation via fminsearch (Nelder-Mead optimization). 
+% likelihood estimation via Matlab's fminsearch (Nelder-Mead optimization). 
 %
-% FittedParams column order is:
-% - 1st parameter is mean of normal (PSE: Point of Subjective Equality)
-% - 2nd parameter is SD of normal (JND: Just Noticeable Difference)
-% - 3rd parameter is lapse rate (fraction of trials with a random response)
-% - 4th parameter is eta (variance scaling factor of beta distribution)
+% Required input: 
+% - "StimLevels", "NumPos", and "OutOfNum"
+%   These should be same sized matrices of size [num_conds x num_levels] 
+%   The meaning is the same as in www.palamedestoolbox.org
+%   
+% Output:
+% - "FittedParams" is a matrix of size [num_conds x (3 or 4)]:
+%   1st column: mean of normal (PSE: Point of Subjective Equality)
+%   2nd column: SD of normal (JND: Just Noticeable Difference)
+%   3rd column: lapse rate (fraction of trials with a random response)
+%   4th column: eta (variance scaling factor of beta distribution)
+%   N.B. The 4th column is only added if beta_flag = true (default: false)
 %
-% Optionally, you can add multiple conditions as multiple rows.
-% Use "paramIDmatrix" to share parameters across conditions.
-% "fixedParams" must be a vector whose indices correspond to the IDs in 
-% paramIDmatrix. Any non-NaN value will serve as a fixed parameter value
-% (e.g. indicating that parameter ID [at this index] will not be fitted).
+% Optional input:
+% - "beta_flag" 
+%   Set beta_flag to true to fit betabinomial model. For more info see:
+%   https://doi.org/10.1016/j.visres.2016.02.002 
+% - "paramIDmatrix" 
+%   A matrix of the same size as output "FittedParams". It contains indices
+%   of the fitted parameters. Use the same index to share parameters across
+%   conditions. E.g. paramIDmatrix = [1 2 3; 4 2 3] fits four parameters,
+%   of which two are unique PSE's, while the SD and lapse rate are shared. 
+%   Default = [1 2 3; 4 5 6; etc] or [1 2 3 4; 5 6 7 8; etc].
+% - "fixedParams"
+%   A vector whose indices correspond to the IDs in "paramIDmatrix". Any
+%   non-NaN value serves as a fixed parameter value. For example, if you do
+%   not wish to fit a lapse rate then set fixedParams = [NaN, NaN, 0]. By
+%   default all parameters are fitted.
+% - "num_fits"
+%   A scalar that indicates the number of fits from which the best one is
+%   returned (best = largest log likelihood, LL). Default = 10.
+% - "num_grid"
+%   A scalar for the number of random parameter draws to select promising
+%   starting points for the optimization algorithm. Default = 1000.
+%
 %
 % David Meijer, 23-03-2022
+
 
 % Ensure same size for all crucial input arguments
 if ~isequal(size(StimLevels),size(NumPos)) || ~isequal(size(StimLevels),size(OutOfNum))
@@ -26,18 +51,10 @@ if (size(StimLevels,2) == 1) && ~(size(StimLevels,1) == 1)
 end
 num_conds = size(StimLevels,1);
 
-% Set default values for some other input arguments
-if (nargin < 4) || isempty(beta_flag)
-    beta_flag = false;  %Set beta_flag to true to fit betabinomial model
-end                     %See https://doi.org/10.1016/j.visres.2016.02.002    
-if nargin < 5 || isempty(num_fits)
-    num_fits = 10;      %Default number of fits (from which we choose best)
-end
-if nargin < 6 || isempty(num_grid)
-    num_grid = 1000;    %Default number of samples for random "grid" search
-end
-
 % Determine the number of parameters per condition
+if (nargin < 4) || isempty(beta_flag)
+    beta_flag = false;  
+end  
 if beta_flag
      num_params_per_cond = 4;
 else
@@ -45,8 +62,8 @@ else
 end
 
 % Determine a one-to-one coding of parameters in a vector to those in a matrix for all conditions (allows sharing of params across conditions)   
-if nargin < 7
-    paramIDmatrix = reshape(1:(num_conds*num_params_per_cond),[num_params_per_cond num_conds])';    %No sharing by default (in case of sharing params in this matrix need to have the same ID)
+if nargin < 5 || isempty(paramIDmatrix)
+    paramIDmatrix = reshape(1:(num_conds*num_params_per_cond),[num_params_per_cond num_conds])';    %No sharing by default (in case of sharing, params in this matrix need to have the same ID)
 else
     assert(isequal([num_conds num_params_per_cond],size(paramIDmatrix)),'Error: paramIDmatrix does not have the correct size [num_conds x num_params_per_cond]');
     assert(isequal(unique(paramIDmatrix)',1:max(paramIDmatrix,[],'all')),'Error: paramIDmatrix should contain all integers from 1 to number of unique parameters (incl. fixed and fitted)');
@@ -63,23 +80,19 @@ for i=1:num_paramsTotal
 end
 
 % Find the fixed parameters
-if nargin < 8
+if nargin < 6
     fixedParams = nan(1,num_paramsTotal); %None of the parameters are fixed
 else
     assert(isvector(fixedParams) && (length(fixedParams) == num_paramsTotal),'Error: fixedParams must be a vector of length equal to the number of unique parameters (incl. fixed and fitted)');
 end
 
-% Find some information about the parameters 2 fit
-idx_params2fit = find(isnan(fixedParams));
-num_params2fit = numel(idx_params2fit);
-if num_params2fit == 0
-    FittedParams = fixedParams(paramIDmatrix);
-    LL = NaN;
-    exitflag = NaN;
-    warning('User requested to fit NO parameters. Only fixed parameter are returned.');
-    return 
+% Some other input settings
+if nargin < 7 || isempty(num_fits)
+    num_fits = 10;      %Default number of fits (from which we choose best)
 end
-types_params2fit = types_paramsTotal(idx_params2fit);
+if nargin < 8 || isempty(num_grid)
+    num_grid = 1000;    %Default number of samples for random "grid" search
+end
 
 % Define helper functions for parameter transformation
 logit = @(p) log(p./(1-p));
@@ -112,6 +125,19 @@ HUB = [PSE_bounds(:,4),JND_bounds(:,4),Gamma_bounds(:,4),Eta_bounds(:,4)];
 if ~beta_flag
     HLB(:,4)=[]; PLB(:,4)=[]; PUB(:,4)=[]; HUB(:,4)=[]; 
 end
+
+% Check that there are parameters 2 fit, if not return the fixed parameter set with its accompanying log likelihood   
+idx_params2fit = find(isnan(fixedParams));
+num_params2fit = numel(idx_params2fit);
+if num_params2fit == 0
+    FittedParams = fixedParams(paramIDmatrix);
+    FittedParams = BackTransform(FittedParams,beta_flag,logistic);
+    LL = ComputeLL([],StimLevels,NumPos,OutOfNum,[],[],beta_flag,paramIDmatrix,fixedParams,[],logistic); %see helper function below
+    exitflag = NaN;
+    disp('fitCumNorm warning: User requested to fit NO parameters. Fixed parameter set is returned with its accompanying log likelihood.');
+    return 
+end
+types_params2fit = types_paramsTotal(idx_params2fit);
 
 % Randomly sample a grid from within the plausible bounds
 params_grid = (PUB(types_params2fit)-PLB(types_params2fit)).*rand(num_grid,num_params2fit)+PLB(types_params2fit);
@@ -152,28 +178,37 @@ LL = LL_fitted(idx_sorted(1));
 exitflag = exitflags(idx_sorted(1));
 
 % Tranform from vector to matrix (incl. fixed parameters)
-fixedParams(idx_params2fit) = fitted_params;                %full vector
-FittedParams = fixedParams(paramIDmatrix);                  %full matrix
+fixedParams(idx_params2fit) = fitted_params;                                %full vector
+FittedParams = fixedParams(paramIDmatrix);                                  %full matrix
 
-% Back-transform the parameters to meaningful space
-FittedParams(:,2) = exp(FittedParams(:,2)); 
-FittedParams(:,3) = logistic(FittedParams(:,3)); 
-if beta_flag
-    FittedParams(:,4) = logistic(FittedParams(:,4)); 
-end
+% Back-transform the parameters to meaningful space 
+FittedParams = BackTransform(FittedParams,beta_flag,logistic);              %See little helper function below
 
 end %[EoF]
 
-%%%%%%%%%%%%%%%%%%%%%%%
-%%% Helper function %%%
-%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Helper functions %%%
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Back-transform fitted parameters to meaningful space
+function FittedParams = BackTransform(FittedParams,beta_flag,logistic)
+
+    FittedParams(:,2) = exp(FittedParams(:,2)); 
+    FittedParams(:,3) = logistic(FittedParams(:,3)); 
+    if beta_flag
+        FittedParams(:,4) = logistic(FittedParams(:,4)); 
+    end
+    
+end %[EoF]
+
+%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Compute log-likelihood (LL) of observing the data under the model and its parameters   
 function LL = ComputeLL(params,StimLevels,NumPos,OutOfNum,HLB,HUB,beta_flag,paramIDmatrix,fixedParams,idx_params2fit,logistic)              
     
     if any(params <= HLB | params >= HUB)                                   
         % Ensure parameter bounds
-        LL = -realmax;                                                              
+        LL = -inf;                                                              
     else
         
         % Tranform from vector to matrix (incl. fixed parameters)
@@ -252,7 +287,7 @@ end
 % fixedParams = nan(1,6);
 % fixedParams(3) = 0.03;
 % 
-% [FittedParams,LL,exitflag] = fitCumNorm(StimLevels,NumPos,OutOfNum,beta_flag,[],[],paramIDmatrix,fixedParams);
+% [FittedParams,LL,exitflag] = fitCumNorm(StimLevels,NumPos,OutOfNum,beta_flag,paramIDmatrix,fixedParams);
 % 
 % fitted_PSEs = FittedParams(:,1)
 % fitted_JNDs = FittedParams(:,2)
@@ -260,3 +295,6 @@ end
 % if beta_flag 
 %     fitted_Etas = FittedParams(:,4)
 % end
+%
+% fixedParams_check = [FittedParams(1,1:4) FittedParams(2,1) FittedParams(3,1)];
+% [~,LL_check,~] = fitCumNorm(StimLevels,NumPos,OutOfNum,beta_flag,paramIDmatrix,fixedParams_check);
