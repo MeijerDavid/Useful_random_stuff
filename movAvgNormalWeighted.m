@@ -4,19 +4,24 @@ function [avg,SD] = movAvgNormalWeighted(x,y,sd,plot_flag)
 %fixed standard deviation (sd = scalar). 
 %Optionally, also compute the weighted SD (2nd output argument) and plot 
 %the results (set "plot_flag" to true). 
+%N.B. At indices where isnan(x), outputs "avg" and "SD" contain NaNs. 
+%Values in y are simply ignored at indices where isnan(x) OR isnan(y).
 
 if nargin < 4; plot_flag = false; end           %Set default for optional input
 
 weights = normpdf(x(:),x(:)',sd);               %2D (use implicit expansion) 
-weights = weights./sum(weights,1);              %normalize over first dimension
+weights(isnan(y),:) = NaN;                      %Ensure proper normalization 
+weights = weights./nansum(weights,1);           %normalize over first dimension
 
-avg = reshape(sum(weights.*y(:),1),size(y));    %compute weighted averages
+avg = reshape(nansum(weights.*y(:),1),size(y)); %compute weighted averages
+avg(isnan(x)) = NaN;                            %Correct zero to NaN (nansum(NaN)-->0)
 
 if (nargout <= 1) && ~plot_flag
     return;                                     %Return if SD was not requested
 end
                                                 
-SD = reshape(sqrt(sum(weights.*(y(:)-avg(:)).^2,1)),size(y)); %compute weighted SD
+SD = reshape(sqrt(nansum(weights.*(y(:)-avg(:)).^2,1)),size(y)); %compute weighted SD
+SD(isnan(x)) = NaN;                             %Correct zero to NaN (nansum(NaN)-->0)
 
 if ~plot_flag; return; end                      %Return if plots were not requested
 
@@ -24,10 +29,12 @@ if ~plot_flag; return; end                      %Return if plots were not reques
 figure; hold on;
 plot(x,y,'ko-','MarkerSize',3);
 
+x_row = x(:)';
 SD_high = avg(:)'+SD(:)';
+avg_row = avg(:)';
 SD_low = avg(:)'-SD(:)';
 
-boundedLine_DM(x,[SD_high; avg; SD_low],[1 0 0]); %See helper function below
+boundedLine_DM(x_row(~isnan(x)),[SD_high(~isnan(x)); avg_row(~isnan(x)); SD_low(~isnan(x))],[1 0 0]); %See helper function below
 
 end %[EoF]
 
@@ -38,6 +45,7 @@ end %[EoF]
 function [hl,hp] = boundedLine_DM(x,y,color)
 %Simple adaptation of boundedline function from:
 %https://github.com/kakearney/boundedline-pkg
+%Ensure that x is a row vector, and y has size [3 x length(x)]
     
 if numel(x) == 1    %special case
     hp = plot([x x],y([1 3]),'-','Linewidth',1.5,'Color',[color 0.2]);
@@ -66,6 +74,12 @@ end %[EoF]
 % % Determine the width of the moving gaussian window
 % width_factor = 3;
 % sd = width_factor*std(diff(x));
+% 
+% %Add some NaNs at random indices
+% num_NaNs_x = 3;
+% x(randperm(num_samples,num_NaNs_x)) = NaN;
+% num_NaNs_y = 5;
+% y(randperm(num_samples,num_NaNs_y)) = NaN;
 % 
 % % Apply the Gaussian weighted moving average
 % [avg,SD] = movAvgNormalWeighted(x,y,sd,true);
