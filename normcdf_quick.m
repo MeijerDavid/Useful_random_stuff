@@ -5,11 +5,11 @@ function p = normcdf_quick(z1,z2,method)
 %standard normal distribution between Z1 and Z2: normcdf(z2)-normcdf(z1). 
 %Care is taken for numerical stability when both Z1 and Z2 are large.
 %
-%By David Meijer on 27-05-2022
+%By David Meijer on 20-06-2022
 
 if nargin < 3
-    method = 4;     %Default is fastest (logistic) approximation method (see below)
-end                 %The speed-up is especially apparent when computing: normcdf(z2)-normcdf(z1)
+    method = 4;     %Default (logistic approximation) is fastest method (see below)
+end                 
 if nargin < 2
     z2 = [];
 end
@@ -22,7 +22,7 @@ if isempty(z2)
         case 1
             
             %W. J. Cody, Rational Chebyshev Approximations for the Error Function, Math. Comp., 1969, pp. 631--637.
-            %Implementation of normcdf is adopted from Matlab's 'normcdf': "Use complementary error function, rather than .5*(1+erf(z/sqrt(2))), to produce accurate near-zero results for large negative z."
+            %Implementation is adopted from Matlab's 'normcdf': "Use complementary error function, rather than .5*(1+erf(z/sqrt(2))), to produce accurate near-zero results for large negative z."
             p = 0.5 * erfc(-z1 ./ sqrt(2));
             
         case 2
@@ -31,7 +31,7 @@ if isempty(z2)
             %See https://en.wikipedia.org/wiki/Q-function#Bounds_and_approximations and https://stats.stackexchange.com/questions/7200/evaluate-definite-interval-of-normal-distribution
             %Unfortunately, the error is rather large for small Z, and p does not equal 0.5 for Z=0, so we use method 1 for all Z smaller than 1.1124 (at this value methods 1 and 2 give the same value). 
             %For Z>1.1124 the error is always positive, but never greater than 0.0001 as compared to method 1. 
-            %Although the formula for this approximation appears simple, the speed-up compared to Matlab's build-in erfc is negligible (mostly, this method is just slower).
+            %Although the formula for this approximation appears simple, the speed-up compared to Matlab's build-in erfc is negligible (actually, this method is twice slower than Matlab's normcdf).
             
             %Initialize outcome (memory declaration)
             p = zeros(size(z1));
@@ -69,7 +69,7 @@ if isempty(z2)
         case 4
             
             %Bowling, S. R., Khasawneh, M. T., Kaewkuekool, S. and Cho, B. R. (2009). A Logistic approximation to the cumulative normal distribution. Journal of Industrial Engineering and Management, 2(1), 114-127. 
-            %Absolute error is maximally 0.0095 (a factor of 6 worse than method 3, but this method shows a small computational speed-up relative to Matlab's build-in erfc). 
+            %Absolute error is maximally 0.0095 (a factor of 6 worse than method 3, but this method is consistently about two times faster relative to Matlab's build-in ercf method, #1 above). 
             p = 1./(1+exp(-1.702*z1));
             
         otherwise
@@ -78,30 +78,19 @@ if isempty(z2)
     
 else
     
-    %By far the fastest method without weird numerical inaccuracies (at least I didn't find them while testing all combinations of z1 and z2 between -100 and +100: see testing code below)
-    %This method is a factor 2-3 times faster than method 1 (speed-up is larger when z1 and z2 are both large). Maximum absolute errors are <0.02 (i.e. at worst 2 x 0.0095).
-    if method == 4
-    
-        a = exp(-1.702*z1);
-        b = exp(-1.702*z2);
-        p = (a-b)./((1+a).*(1+b));
-        
-    else
-    
-        %Avoid numerical inaccuracies that occur when both z are large, i.e.
-        %both p would be near one and the difference would falsely return zero.
-        z_cut_off = 6;
-        both_large = z1>z_cut_off & z2>z_cut_off;
-        if any(both_large,'all')
-            z1_both_large = z1(both_large);
-            z1(both_large) = -z2(both_large);
-            z2(both_large) = -z1_both_large;
-        end
+    %Avoid numerical inaccuracies that occur when both z are large, i.e. both p would be near one and the difference would falsely return zero.
+    z_cut_off = 6;  
+    both_large = z1>z_cut_off & z2>z_cut_off;
+    if any(both_large,'all')
+        %Avoid the use of indexing because it's slow: i.e. don't use z1(both_large) and z2(both_large)
+        z1_copy = z1;
+        z1 = ~both_large.*z1_copy - both_large.*z2;                         %Keep z1 or use -z2 instead
+        z2 = ~both_large.*z2 - both_large.*z1_copy;                         %Keep z2 or use -z1 instead
+    end
 
-        %Compute the definite integral of the standard normal distribution.
-        p = normcdf_quick(z2,[],method)-normcdf_quick(z1,[],method);
-        
-    end 
+    %Compute the definite integral of the standard normal distribution.
+    p = normcdf_quick(z2,[],method)-normcdf_quick(z1,[],method);
+
 end
 
 end %[EoF]
@@ -135,9 +124,11 @@ end %[EoF]
 % p7 = normcdf_quick(z1,z2,3);
 % p8 = normcdf_quick(z1,z2,4);
 % 
-% p58 = p5-p8;
-% max(p58(:))
-% min(p58(:))
+% p0 = normcdf(z2)-normcdf(z1);
+% 
+% p08 = p0-p8;
+% max(p08(:))
+% min(p08(:))
 % 
 % method = 4;
 % profile on
