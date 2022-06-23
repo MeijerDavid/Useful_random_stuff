@@ -78,6 +78,14 @@ if isempty(z2)
     
 else
     
+%     %Warning: Don't use this! Although it is a small speed-up, this leads to NaN if any of the z-values is extremely small (a or b is Inf when z<-417 due to numerical precision, and inf/inf results in NaN).  
+%     if method == 4
+%         a = exp(-1.702*z1);
+%         b = exp(-1.702*z2);
+%         p = (a-b)./((1+a).*(1+b));
+%         return
+%     end
+    
     %Avoid numerical inaccuracies that occur when both z are large, i.e. both p would be near one and the difference would falsely return zero.
     z_cut_off = 6;  
     both_large = z1>z_cut_off & z2>z_cut_off;
