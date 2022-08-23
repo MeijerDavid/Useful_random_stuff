@@ -1,40 +1,22 @@
-function [expectation,variance] = twoMomentsOfMixture(expectations,variances,weights)
-%Compute the expectation and variance of a mixture distribution based on
-%vectors of expectations, variances and weights. If the input variables are
-%matrices, then the expectation and variance of the mixture distributions
-%are computed along the first dimension (each column of the input matrices
-%represents a mixture distribution). 
+function [expectation,variance] = twoMomentsOfMixture(expectations,variances,weights,dim)
+%Compute the expectation and variance of 1D mixture distributions over the 
+%specified dimension 'dim'. By default dim=1, i.e. each column of the input
+%matrices represents a mixture distribution. 
 
-assert(isequal(size(expectations),size(variances)),'expectations and variances must be same sized matrices');
-assert(isequal(size(expectations),size(weights)),'expectations and weights must be same sized matrices');
-
-%Ensure 2D matrices
-original_size = size(expectations);
-if numel(original_size) > 2
-    [num_rows,num_cols] = size(expectations);
-    expectations = reshape(expectations,[num_rows num_cols]);
-    variances = reshape(variances,[num_rows num_cols]);
-    weights = reshape(weights,[num_rows num_cols]);
+if nargin < 4
+    dim = 1;
 end
 
-%If vectors, ensure column vectors
-if isrow(expectations)
-    expectations = expectations';
-    variances = variances';
-    weights = weights';
-end
+%Check that all input variables have the same size
+assert(isequal(size(expectations),size(variances)),'All input variables must have equal size');
+assert(isequal(size(expectations),size(weights)),'All input variables must have equal size');
 
 %Compute the weighted expectation
-expectation = sum(weights.*expectations,1);
+expectation = sum(weights.*expectations,dim);
 
-%Compute the weighted variance
-variance = sqrt(sum(weights.*(variances+expectations.^2),1)-expectation.^2);
-
-%Rehsape the output to match the input
-if numel(original_size) > 2
-    new_size = [1 original_size(2:end)];
-    expectation = reshape(expectation,new_size);
-    variance = reshape(variance,new_size);
+%Also compute the weighted variance if requested
+if nargout >= 2
+    variance = sum(weights.*(variances+expectations.^2),dim)-expectation.^2;
 end
 
 end %[EoF]
