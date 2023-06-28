@@ -1,4 +1,4 @@
-function lpe = logPlusExp(l1,l2)
+function lpe = logplusexp(l1,l2)
 %Robustly compute sum of two log-transformed values (e.g. probabilities)
 %Input matrices l1=log(p1) and l2=log(p2).
 %Output matrix lpe = log(exp(l1) + exp(l2)).

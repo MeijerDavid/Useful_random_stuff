@@ -1,0 +1,5 @@
+I deleted a lot of not so useful functions.. 
+
+There's more at:
+
+https://github.com/tminka/lightspeed

@@ -5,8 +5,8 @@ KbName('UnifyKeyNames');            %Always do this first before calling KbName 
 % Defining keys of interest for input 
 enterKey  = KbName('Return');       % To start the program
 quitKey   = KbName('ESCAPE');       % To exit the program
-leftKey   = KbName('leftArrow');    % To answer Left
-rightKey  = KbName('rightArrow');   % To answer Right
+leftKey   = KbName('l');            %'leftArrow');    % To answer Left
+rightKey  = KbName('r');            %'rightArrow');   % To answer Right
 
 keysOfInterest=zeros(1,256);
 keysOfInterest([quitKey,leftKey,rightKey])=1;
