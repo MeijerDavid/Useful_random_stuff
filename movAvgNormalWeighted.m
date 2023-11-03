@@ -9,6 +9,9 @@ function [avg,SD] = movAvgNormalWeighted(x,y,sd,plot_flag)
 
 if nargin < 4; plot_flag = false; end           %Set default for optional input
 
+assert(~all(isnan(y)), 'y has only nans')
+assert(~all(isnan(x)), 'x has only nans')
+
 weights = normpdf(x(:),x(:)',sd);               %2D (use implicit expansion) 
 weights(isnan(y),:) = NaN;                      %Ensure proper normalization 
 weights = weights./nansum(weights,1);           %normalize over first dimension

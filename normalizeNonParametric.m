@@ -1,6 +1,7 @@
-function x_norm = normalizeNonParametric(x)
-%Normalize values in vector x to their cumulative probabilities, x_norm. 
-%The middle CDF probability is chosed for multiple identical values in x.
+function [x_pcum,x_zscored] = normalizeNonParametric(x)
+%Normalize values in vector x to their cumulative probabilities, x_pcum. 
+%The middle CDF probability is chosen for multiple identical values in x.
+%Optionally, also return "z-scores" of x as: x_zscored = norminv(x_pcum).
 
 %Input and output are assumed column vectors
 if isrow(x)
@@ -23,11 +24,16 @@ cdf_lower_step_idx = [0; cdf_upper_step_idx(1:(end-1))];
 cdf_middle_probs = .5*(cdf_lower_step_idx+cdf_upper_step_idx)/num_x;
 
 %Return to original order of the values
-x_norm = cdf_middle_probs(idx_unique_x);
+x_pcum = cdf_middle_probs(idx_unique_x);
 
 %Return as row vector instead of column vector?
 if row_bool
-    x_norm = x_norm';
+    x_pcum = x_pcum';
+end
+
+%Also compute z-scores for the normalized values?
+if nargout >= 2
+    x_zscored = norminv(x_pcum);
 end
 
 end %[EoF]

@@ -8,10 +8,9 @@ end
 
 if log_flag
     %Compute y=log(pdf)
-    y = log(normcdf_quick((x-b)./sd, (x-a)./sd)) - log(b-a);
+    y = log(normcdf_diff((x-b)./sd, (x-a)./sd)) - log(b-a);
 else
-    %y = 1./(b-a).*(normcdf_quick((x-a)./sd)-normcdf_quick((x-b)./sd));
-    y = 1./(b-a).*normcdf_quick((x-b)./sd, (x-a)./sd);
+    y = 1./(b-a).*normcdf_diff((x-b)./sd, (x-a)./sd);
 end
 
 end %[EoF]

@@ -4,8 +4,9 @@
 % 
 % 2022-06-03 Roberto Barumerli
 % 2022-12-08 David Meijer (modifications and commments)
+% 2023-09-26 David Meijer (added support for LOO CV statistic)
 
-function [betas, loglik, rsquared, pval] = lm_fast(X, y, flag_intercept)
+function [betas, loglik, rsquared, pval, cv, loglik_cv] = lm_fast(X, y, flag_intercept)
 % INPUTS (nans are removed)
 % X:                nxp regressor matrix of n observations across p regressors
 % y:                nx1 vector of responses 
@@ -16,6 +17,8 @@ function [betas, loglik, rsquared, pval] = lm_fast(X, y, flag_intercept)
 % loglik:           scalar for log likelihood (summed over samples)   
 % rsquared:         scalar for R squared (coefficient of determination)
 % pval:             px1 vector of p-values for significant difference from zero
+% cv:               leave-one-out cross validation statistic (MSE of LOO predictions)
+% loglik_cv:        cross-validated log-likelihood
 
 if nargin < 3
     flag_intercept = false;
@@ -66,5 +69,21 @@ if nargout >= 4
     T    = betas./se;                               %t values of betas
     pval = 2*tcdf(abs(T),df,'upper');               %two sided p values of betas
 end       
+
+%Compute leave one out cross-validation statistic
+%See: https://robjhyndman.com/hyndsight/loocv-linear-models/
+%and https://otexts.com/fpp2/regression-matrices.html#regression-matrices
+if nargout >= 5
+    %H = X*(X'*X)\X';                               %hat matrix 
+    H = X*(inv(transpose(X)*X))*transpose(X);       
+    h = diag(H);                                    %diagonal values
+    cv = mean(((y-y_pred)./(1-h)).^2);              %MSE of LOO predictions
+end
+
+% cross validated log likelihood
+if nargout >= 6
+    squared_pe = ((y-y_pred)./(1-h)).^2;            %squared prediction errors
+    loglik_cv = sum(-0.5*squared_pe./cv-log(sqrt(cv))-0.5*log(2*pi));
+end
 
 end %[EoF]
