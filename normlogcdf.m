@@ -1,38 +1,30 @@
-function e = normlogcdf(x)
-% Log of normal cumulative density function.
-% More accurate than log(normcdf(x)) when x is small.
-% The following is a quick and dirty approximation to normcdfln:
-% normcdfln(x) =approx -(log(1+exp(0.88-x))/1.5)^2
-
+function lp = normlogcdf(z)
+% Log of normal cumulative density function: lp = log(normcdf(z)).
+% Also returns accurate approximations when z is very negative. 
+%
 % Adapted from Tom Minka's Lightspeed function NORMCDFLN
 % https://github.com/tminka/lightspeed
+%
+%David Meijer, 20-3-2024
 
-% make e the same shape as x, and inherit any NaNs.
-e = x;
+% Make output the same shape as input, and inherit any NaNs.
+lp = z;
+
+% Use threshold for regular computation using Matlab's normcdf function
 t = -6.5;
-i = find(x >= t);
-if ~isempty(i)
-  e(i) = log(normcdf(x(i)));
+i_normal = (z >= t);
+if any(i_normal,'all')
+    lp(i_normal) = log(normcdf(z(i_normal)));
 end
-i = find(x < t);
-if ~isempty(i)
-  x = x(i);
-  z = x.^(-2);
-  if 0
-    % log of asymptotic series for cdf
-    % subs(x=-x,asympt(sqrt(2*Pi)*gauss_cdf(-x),x));
-    c = [-1 3 -15 105 -945 10395 -135135 2027025 -34459425 654729075];
-    y = 0;
-    for i = length(c):-1:1
-      y = z.*(y + c(i));
-    end
-    %y = z.*(c(1)+z.*(c(2)+z.*(c(3)+z.*(c(4)+z.*(c(5)+z.*(c(6)+z.*c(7)))))));
-    y = log(1+y);
-  else
-    % asymptotic series for logcdf
-    % subs(x=-x,asympt(log(gauss_cdf(-x)),x));
+
+% Approximation for large negative z with asymptotic series for logcdf
+i_approx = z < t;
+if any(i_approx,'all')
+    z = z(i_approx);
+    z2 = z.^(-2);
     c = [-1 5/2 -37/3 353/4 -4081/5 55205/6 -854197/7];
-    y = z.*(c(1)+z.*(c(2)+z.*(c(3)+z.*(c(4)+z.*(c(5)+z.*(c(6)+z.*c(7)))))));
-  end
-  e(i) = y -0.5*log(2*pi) -0.5*x.^2 - log(-x);
+    y = z2.*(c(1)+z2.*(c(2)+z2.*(c(3)+z2.*(c(4)+z2.*(c(5)+z2.*(c(6)+z2.*c(7)))))));
+    lp(i_approx) = y -0.5*log(2*pi) -0.5*z.^2 - log(-z);
 end
+
+end %[EoF]
