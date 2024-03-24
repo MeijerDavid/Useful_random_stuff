@@ -9,13 +9,12 @@ end
 
 if log_flag
     %Compute y=log(pdf)
-    %y = normlogpdf(x,mu,sd) - log(sd.*normcdf_quick((a-mu)./sd,(b-mu)./sd));
-    y = normlogpdf(x,mu,sd) - log(sd) - log(normcdf_quick((a-mu)./sd,(b-mu)./sd));
+    y = normlogpdf(x,mu,sd) - normcdf_diff((a-mu)./sd,(b-mu)./sd,true);
 
     edge_correction_value = -inf;
 else
-    %y = normpdf((x-mu)./sd) ./ (sd.*(normcdf_quick((b-mu)./sd)-normcdf_quick((a-mu)./sd)));
-    y = normpdf((x-mu)./sd) ./ (sd.*normcdf_quick((a-mu)./sd,(b-mu)./sd));
+    %y = normpdf((x-mu)./sd) ./ (sd.*(normcdf((b-mu)./sd)-normcdf((a-mu)./sd)));
+    y = normpdf(x,mu,sd) ./ normcdf_diff((a-mu)./sd,(b-mu)./sd);
     
     edge_correction_value = 0;
 end
