@@ -5,7 +5,7 @@ function lp = normlogcdf(z)
 % Adapted from Tom Minka's Lightspeed function NORMCDFLN
 % https://github.com/tminka/lightspeed
 %
-%David Meijer, 20-3-2024
+% David Meijer, 20-3-2024
 
 % Make output the same shape as input, and inherit any NaNs.
 lp = z;
