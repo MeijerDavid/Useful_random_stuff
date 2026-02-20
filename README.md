@@ -1,2 +1,2 @@
 # Useful_random_stuff
- Private random functions etc
+ Random functions for my own use. Some better than others. Use with care!
